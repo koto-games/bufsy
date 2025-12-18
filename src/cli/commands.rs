@@ -39,11 +39,17 @@ impl Commands {
                 println!("Исходное сообщение: {}", message);
                 println!("\n--- ШИФРОВАНИЕ ---");
 
-                // Шифруем
-                match encrypt(message) {
-                    Ok((key_hex, nonce_hex, ciphertext_hex)) => {
-                        println!("Ключ (hex):       {}", key_hex);
-                        println!("Nonce (hex):      {}", nonce_hex);
+                // Генерируем ключ и nonce, конвертируем в hex
+                let key_bytes = generate_key();
+                let nonce_bytes = generate_nonce();
+                let key_hex = hex::encode(key_bytes);
+                let nonce_hex = hex::encode(nonce_bytes);
+                println!("Ключ (hex):        {}", key_hex);
+                println!("Nonce (hex):       {}", nonce_hex);
+
+                // Шифруем, передавая ключ и nonce в hex
+                match encrypt(message, &key_hex, &nonce_hex) {
+                    Ok(ciphertext_hex) => {
                         println!("Зашифровано (hex): {}", ciphertext_hex);
 
                         println!("\n--- ДЕШИФРОВАНИЕ ---");

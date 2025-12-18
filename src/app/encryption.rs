@@ -20,18 +20,30 @@ pub fn generate_nonce() -> [u8; 12] {
     nonce
 }
 
-/// Шифрует сообщение с AES-256-GCM
-/// Возвращает (ключ_hex, nonce_hex, зашифрованные_данные_hex)
-pub fn encrypt(plaintext: &str) -> Result<(String, String, String), String> {
-    // Генерируем ключ
-    let key_bytes = generate_key();
-    let key = aes_gcm::Key::<Aes256Gcm>::from_slice(&key_bytes);
+pub fn encrypt(plaintext: &str, key_hex: &str, nonce_hex: &str) -> Result<String, String> {
+    // Декодируем key и nonce из hex
+    let key_bytes =
+        hex::decode(key_hex).map_err(|e| format!("Ошибка декодирования ключа: {}", e))?;
+    let nonce_bytes =
+        hex::decode(nonce_hex).map_err(|e| format!("Ошибка декодирования nonce: {}", e))?;
+
+    // Проверяем размеры
+    if key_bytes.len() != 32 {
+        return Err(format!(
+            "Неверный размер ключа: {} байт (ожидается 32)",
+            key_bytes.len()
+        ));
+    }
+    if nonce_bytes.len() != 12 {
+        return Err(format!(
+            "Неверный размер nonce: {} байт (ожидается 12)",
+            nonce_bytes.len()
+        ));
+    }
 
     // Создаем cipher
+    let key = aes_gcm::Key::<Aes256Gcm>::from_slice(&key_bytes);
     let cipher = Aes256Gcm::new(&key);
-
-    // Генерируем nonce
-    let nonce_bytes = generate_nonce();
     let nonce = Nonce::from_slice(&nonce_bytes);
 
     // Шифруем
@@ -39,12 +51,8 @@ pub fn encrypt(plaintext: &str) -> Result<(String, String, String), String> {
         .encrypt(nonce, plaintext.as_bytes())
         .map_err(|e| format!("Ошибка шифрования: {:?}", e))?;
 
-    // Конвертируем в hex
-    let key_hex = hex::encode(key_bytes);
-    let nonce_hex = hex::encode(nonce_bytes);
-    let ciphertext_hex = hex::encode(ciphertext);
-
-    Ok((key_hex, nonce_hex, ciphertext_hex))
+    // Возвращаем только ciphertext в hex
+    Ok(hex::encode(ciphertext))
 }
 
 /// Дешифрует сообщение с AES-256-GCM
