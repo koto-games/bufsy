@@ -1,8 +1,6 @@
 use crate::{
-    app::{
-        encryption::{decrypt, encrypt, generate_key, generate_nonce},
-        fnthost,
-    },
+    app::fnthost,
+    cli::init,
     transport::{Backend, axum::ServerAXUM},
 };
 use anyhow::Result;
@@ -11,7 +9,7 @@ use local_ip_address::local_ip;
 
 #[derive(Subcommand)]
 pub enum Commands {
-    /// Run запуск
+    /// запуск
     Run {
         #[arg(default_value_t = String::from(local_ip().unwrap().to_string()))]
         ip: String,
@@ -19,8 +17,12 @@ pub enum Commands {
         #[arg(default_value_t = 9296)]
         port: u16,
     },
+
     /// перемещение
     Move {},
+
+    /// инициализация
+    Init {},
 }
 
 impl Commands {
@@ -29,45 +31,13 @@ impl Commands {
             Commands::Run { ip, port } => {
                 println!("{}:{}", ip, *port);
                 let mut ser = Backend::Axum(ServerAXUM::new(ip, *port, fnthost));
-
                 ser.run().await?;
             }
             Commands::Move {} => {
                 println!("move");
-                let message = "Привет, это секретное сообщение!";
-
-                println!("Исходное сообщение: {}", message);
-                println!("\n--- ШИФРОВАНИЕ ---");
-
-                // Генерируем ключ и nonce, конвертируем в hex
-                let key_bytes = generate_key();
-                let nonce_bytes = generate_nonce();
-                let key_hex = hex::encode(key_bytes);
-                let nonce_hex = hex::encode(nonce_bytes);
-                println!("Ключ (hex):        {}", key_hex);
-                println!("Nonce (hex):       {}", nonce_hex);
-
-                // Шифруем, передавая ключ и nonce в hex
-                match encrypt(message, &key_hex, &nonce_hex) {
-                    Ok(ciphertext_hex) => {
-                        println!("Зашифровано (hex): {}", ciphertext_hex);
-
-                        println!("\n--- ДЕШИФРОВАНИЕ ---");
-
-                        // Дешифруем
-                        match decrypt(&key_hex, &nonce_hex, &ciphertext_hex) {
-                            Ok(decrypted) => {
-                                println!("Расшифровано: {}", decrypted);
-
-                                if decrypted == message {
-                                    println!("\n✓ Успешно! Сообщения совпадают.");
-                                }
-                            }
-                            Err(e) => println!("Ошибка: {}", e),
-                        }
-                    }
-                    Err(e) => println!("Ошибка: {}", e),
-                }
+            }
+            Commands::Init {} => {
+                init(None).await?;
             }
         }
         Ok(())

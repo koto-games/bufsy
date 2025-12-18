@@ -14,3 +14,17 @@ impl Cli {
         Ok(())
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[tokio::test]
+    async fn test_name() {
+        Cli::run(&Cli {
+            command: Commands::Move {},
+        })
+        .await
+        .unwrap();
+    }
+}

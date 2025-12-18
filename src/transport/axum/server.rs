@@ -1,19 +1,19 @@
 use anyhow::Result;
 use axum::{
     Router,
-    extract::State,
+    extract::{ConnectInfo, State},
     {routing::get, routing::post},
 };
 use std::net::SocketAddr;
 
 pub struct ServerAXUM {
     host: String,
-    fnt: fn(String) -> Result<()>,
+    fnt: fn(String, String) -> Result<()>,
     port: u16,
 }
 
 impl ServerAXUM {
-    pub fn new(host: &str, port: u16, fnt: fn(String) -> Result<()>) -> Self {
+    pub fn new(host: &str, port: u16, fnt: fn(String, String) -> Result<()>) -> Self {
         Self {
             host: host.to_string(),
             fnt,
@@ -32,8 +32,12 @@ impl ServerAXUM {
     // using the `axum::extract::State` extractor.
     // This allows the handler to call the configured function without needing access to the
     // full `ServerAXUM` instance, resolving the `Handler` trait not satisfied error.
-    async fn text(State(fnt_handler): State<fn(String) -> Result<()>>, body: String) -> String {
-        fnt_handler(body.clone()).unwrap();
+    async fn text(
+        ConnectInfo(addr): ConnectInfo<SocketAddr>,
+        State(fnt_handler): State<fn(String, String) -> Result<()>>,
+        body: String,
+    ) -> String {
+        fnt_handler(body.clone(), addr.ip().to_string()).unwrap();
         "oK!".to_string()
     }
 
@@ -53,14 +57,43 @@ impl ServerAXUM {
         let app = self.router();
 
         let listener = tokio::net::TcpListener::bind(self.address()).await?;
-        axum::serve(listener, app).await?;
+        axum::serve(
+            listener,
+            app.into_make_service_with_connect_info::<SocketAddr>(),
+        )
+        .await?;
         Ok(())
     }
 }
 
 #[cfg(test)]
 mod tests {
+    use std::net::{IpAddr, Ipv4Addr};
+
+    use axum::{
+        body::Body,
+        http::{Request, StatusCode},
+    };
+    use http_body_util::BodyExt;
+    use tower::ServiceExt;
+
     use super::*;
+
+    #[tokio::test]
+    async fn new_router() {
+        let server = ServerAXUM::new("localhost", 8099, fnt_test);
+        let app = server.router();
+
+        let response = app
+            .oneshot(Request::builder().uri("/").body(Body::empty()).unwrap())
+            .await
+            .unwrap();
+
+        assert_eq!(response.status(), StatusCode::OK);
+
+        let body = response.into_body().collect().await.unwrap().to_bytes();
+        assert_eq!(&body[..], b"Bufsy");
+    }
 
     #[test]
     fn address_new() {
@@ -77,12 +110,20 @@ mod tests {
     #[tokio::test]
     async fn text_echo() {
         let server = ServerAXUM::new("localhost", 8080, fnt_test);
-        let result = ServerAXUM::text(State(server.fnt), "catRUST_***_rust w :>".to_string()).await;
+        let result = ServerAXUM::text(
+            ConnectInfo(SocketAddr::new(
+                IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)),
+                8080,
+            )),
+            State(server.fnt),
+            "catRUST_***_rust w :>".to_string(),
+        )
+        .await;
 
         assert_eq!(result, "oK!".to_string());
     }
 
-    fn fnt_test(_text: String) -> Result<()> {
+    fn fnt_test(_text: String, _addr: String) -> Result<()> {
         Ok(())
     }
 }
