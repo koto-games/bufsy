@@ -1,23 +1,17 @@
 use anyhow::Result;
 use clap::Parser;
-use std::{fs, sync::LazyLock};
 
 mod app;
 mod cli;
+mod config;
 mod transport;
-
-static CONFIG_DIR: LazyLock<String> = LazyLock::new(|| {
-    format!("{}/bufsy/", dirs::config_dir().unwrap().to_str().unwrap()).to_string()
-});
-
-static KEY: LazyLock<String> =
-    LazyLock::new(|| fs::read_to_string(format!("{}/key", &*CONFIG_DIR)).unwrap());
 
 #[tokio::main]
 async fn main() -> Result<()> {
     let cli = cli::Cli::parse();
+    let config_dir = format!("{}/bufsy", dirs::config_dir().unwrap().to_str().unwrap());
 
-    cli.run().await?;
+    cli.run(config_dir).await?;
 
     Ok(())
 }

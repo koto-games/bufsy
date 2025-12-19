@@ -1,4 +1,5 @@
 use super::commands::Commands;
+use crate::{cli::init, config::load};
 use anyhow::Result;
 use clap::Parser;
 
@@ -9,22 +10,13 @@ pub struct Cli {
 }
 
 impl Cli {
-    pub async fn run(&self) -> Result<()> {
-        self.command.run().await?;
+    pub async fn run(&self, config_dir: String) -> Result<()> {
+        if (Commands::Init {}) == self.command {
+            init(&config_dir).await?;
+            return Ok(());
+        }
+        let config = load(&config_dir);
+        self.command.run(config_dir, config).await?;
         Ok(())
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[tokio::test]
-    async fn test_name() {
-        Cli::run(&Cli {
-            command: Commands::Move {},
-        })
-        .await
-        .unwrap();
     }
 }

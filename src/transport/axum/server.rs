@@ -1,3 +1,4 @@
+use crate::config::Settings;
 use anyhow::Result;
 use axum::{
     Router,
@@ -8,36 +9,51 @@ use std::net::SocketAddr;
 
 pub struct ServerAXUM {
     host: String,
-    fnt: fn(String, String) -> Result<()>,
+    fnt: fn(String, String, &Settings) -> Result<()>,
     port: u16,
+    settings: Settings,
 }
 
 impl ServerAXUM {
-    pub fn new(host: &str, port: u16, fnt: fn(String, String) -> Result<()>) -> Self {
+    pub fn new(
+        host: &str,
+        port: u16,
+        fnt: fn(String, String, &Settings) -> Result<()>,
+        settings: Settings,
+    ) -> Self {
         Self {
             host: host.to_string(),
             fnt,
             port,
+            settings,
         }
     }
 
     fn router(&self) -> Router {
+        // Use a single tuple state containing both the function pointer and the Settings.
+        // This avoids requiring FromRef implementations for extracting multiple separate State<T>
+        // values and keeps the handler signature simple.
+        let app_state = (self.fnt, self.settings.clone());
+
         Router::new()
             .route("/text", post(Self::text))
-            .with_state(self.fnt)
             .route("/", get("Bufsy"))
+            .with_state(app_state)
     }
 
-    // The `text` handler now takes the `fnt` function pointer directly as state
-    // using the `axum::extract::State` extractor.
-    // This allows the handler to call the configured function without needing access to the
-    // full `ServerAXUM` instance, resolving the `Handler` trait not satisfied error.
+    // The `text` handler now extracts the whole application state tuple `(fn, Settings)`
+    // as a single `State` value and destructures it locally.
     async fn text(
         ConnectInfo(addr): ConnectInfo<SocketAddr>,
-        State(fnt_handler): State<fn(String, String) -> Result<()>>,
+        State((fnt_handler, settings)): State<(
+            fn(String, String, &Settings) -> Result<()>,
+            Settings,
+        )>,
         body: String,
     ) -> String {
-        fnt_handler(body.clone(), addr.ip().to_string()).unwrap();
+        // Call the configured function pointer with the received body and client IP.
+        // Unwrap here mirrors the previous behavior in tests; consider proper error handling.
+        fnt_handler(body.clone(), addr.ip().to_string(), &settings).unwrap();
         "oK!".to_string()
     }
 
@@ -68,6 +84,7 @@ impl ServerAXUM {
 
 #[cfg(test)]
 mod tests {
+    use crate::config::load_config::tests::test_load_config;
     use std::net::{IpAddr, Ipv4Addr};
 
     use axum::{
@@ -81,7 +98,7 @@ mod tests {
 
     #[tokio::test]
     async fn new_router() {
-        let server = ServerAXUM::new("localhost", 8099, fnt_test);
+        let server = ServerAXUM::new("localhost", 8099, fnt_test, test_load_config());
         let app = server.router();
 
         let response = app
@@ -97,25 +114,25 @@ mod tests {
 
     #[test]
     fn address_new() {
-        let server = ServerAXUM::new("111.168.11.75", 8084, fnt_test);
+        let server = ServerAXUM::new("111.168.11.75", 8084, fnt_test, test_load_config());
         assert_eq!(
             server.address().to_string(),
             "111.168.11.75:8084".to_string()
         );
 
-        let server = ServerAXUM::new("localhost", 999, fnt_test);
+        let server = ServerAXUM::new("localhost", 999, fnt_test, test_load_config());
         assert_eq!(server.address().to_string(), "127.0.0.1:999".to_string());
     }
 
     #[tokio::test]
     async fn text_echo() {
-        let server = ServerAXUM::new("localhost", 8080, fnt_test);
+        let server = ServerAXUM::new("localhost", 8080, fnt_test, test_load_config());
         let result = ServerAXUM::text(
             ConnectInfo(SocketAddr::new(
                 IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)),
                 8080,
             )),
-            State(server.fnt),
+            State((server.fnt, server.settings)),
             "catRUST_***_rust w :>".to_string(),
         )
         .await;
@@ -123,7 +140,7 @@ mod tests {
         assert_eq!(result, "oK!".to_string());
     }
 
-    fn fnt_test(_text: String, _addr: String) -> Result<()> {
+    fn fnt_test(_text: String, _addr: String, _settings: &Settings) -> Result<()> {
         Ok(())
     }
 }
