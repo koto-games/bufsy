@@ -2,13 +2,14 @@ use crate::app::encryption::generate_key;
 use local_ip_address::local_ip;
 use serde::{Deserialize, Serialize};
 
-#[derive(Debug, Clone, Deserialize, Serialize)]
+#[derive(Debug, Clone, Deserialize, Serialize, PartialEq)]
 pub struct Settings {
     pub server: Server,
     pub key: String,
+    pub connections: Vec<Server>,
 }
 
-#[derive(Debug, Clone, Deserialize, Serialize)]
+#[derive(Debug, Clone, Deserialize, Serialize, PartialEq)]
 pub struct Server {
     pub host: String,
     pub port: u16,
@@ -22,6 +23,7 @@ impl Default for Settings {
                 port: 9296,
             },
             key: hex::encode(generate_key()),
+            connections: Vec::new(),
         }
     }
 }
