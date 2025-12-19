@@ -5,7 +5,9 @@ use axum::{
     extract::{ConnectInfo, State},
     {routing::get, routing::post},
 };
-use std::net::SocketAddr;
+use sha2::{Digest, Sha224};
+use std::{collections::HashSet, net::SocketAddr, sync::Arc};
+use tokio::sync::RwLock;
 
 pub struct ServerAXUM {
     host: String,
@@ -33,7 +35,15 @@ impl ServerAXUM {
         // Use a single tuple state containing both the function pointer and the Settings.
         // This avoids requiring FromRef implementations for extracting multiple separate State<T>
         // values and keeps the handler signature simple.
-        let app_state = (self.fnt, self.settings.clone());
+        let app_state: (
+            fn(String, String, &Settings) -> Result<()>,
+            Settings,
+            Arc<RwLock<HashSet<[u8; 28]>>>,
+        ) = (
+            self.fnt,
+            self.settings.clone(),
+            Arc::new(RwLock::new(HashSet::with_capacity(312222))),
+        );
 
         Router::new()
             .route("/text", post(Self::text))
@@ -45,16 +55,24 @@ impl ServerAXUM {
     // as a single `State` value and destructures it locally.
     async fn text(
         ConnectInfo(addr): ConnectInfo<SocketAddr>,
-        State((fnt_handler, settings)): State<(
+        State((fnt_handler, settings, db)): State<(
             fn(String, String, &Settings) -> Result<()>,
             Settings,
+            Arc<RwLock<HashSet<[u8; 28]>>>,
         )>,
         body: String,
     ) -> String {
-        // Call the configured function pointer with the received body and client IP.
-        // Unwrap here mirrors the previous behavior in tests; consider proper error handling.
-        fnt_handler(body.clone(), addr.ip().to_string(), &settings).unwrap();
-        "oK!".to_string()
+        let mut hasher = Sha224::new();
+        hasher.update(body.as_bytes());
+        let result: [u8; 28] = hasher.finalize().as_slice().try_into().unwrap();
+        let mut db_rw = db.write().await;
+        if !db_rw.contains(&result) {
+            db_rw.insert(result);
+            fnt_handler(body.clone(), addr.ip().to_string(), &settings).unwrap();
+            "oK".to_string()
+        } else {
+            "Error".to_string()
+        }
     }
 
     pub fn address(&self) -> SocketAddr {
@@ -132,12 +150,63 @@ mod tests {
                 IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)),
                 8080,
             )),
-            State((server.fnt, server.settings)),
+            State((
+                server.fnt,
+                server.settings,
+                Arc::new(RwLock::new(HashSet::new())),
+            )),
             "catRUST_***_rust w :>".to_string(),
         )
         .await;
 
-        assert_eq!(result, "oK!".to_string());
+        assert_eq!(result, "oK".to_string());
+    }
+
+    #[tokio::test]
+    async fn text_error_hash() {
+        let server = ServerAXUM::new("localhost", 8080, fnt_test, test_load_config());
+        let db: Arc<RwLock<HashSet<[u8; 28]>>> = Arc::new(RwLock::new(HashSet::new()));
+        let result = ServerAXUM::text(
+            ConnectInfo(SocketAddr::new(
+                IpAddr::V4(Ipv4Addr::new(127, 0, 0, 3)),
+                8080,
+            )),
+            State((server.fnt, server.settings.clone(), db.clone())),
+            "catRUST_***_rust w :>".to_string(),
+        )
+        .await;
+        assert_eq!(result, "oK".to_string());
+        let result = ServerAXUM::text(
+            ConnectInfo(SocketAddr::new(
+                IpAddr::V4(Ipv4Addr::new(127, 1, 0, 2)),
+                8080,
+            )),
+            State((server.fnt, server.settings.clone(), db.clone())),
+            "ca5R :>".to_string(),
+        )
+        .await;
+        assert_eq!(result, "oK".to_string());
+        let result = ServerAXUM::text(
+            ConnectInfo(SocketAddr::new(
+                IpAddr::V4(Ipv4Addr::new(127, 1, 0, 24)),
+                8081,
+            )),
+            State((server.fnt, server.settings.clone(), db.clone())),
+            "catR :>".to_string(),
+        )
+        .await;
+        assert_eq!(result, "oK".to_string());
+        let result = ServerAXUM::text(
+            ConnectInfo(SocketAddr::new(
+                IpAddr::V4(Ipv4Addr::new(127, 0, 0, 2)),
+                8080,
+            )),
+            State((server.fnt, server.settings, db)),
+            "catRUST_***_rust w :>".to_string(),
+        )
+        .await;
+
+        assert_eq!(result, "Error".to_string());
     }
 
     fn fnt_test(_text: String, _addr: String, _settings: &Settings) -> Result<()> {

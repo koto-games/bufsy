@@ -20,8 +20,8 @@ pub fn fnthost(text: String, ip: String, config: &Settings) -> Result<()> {
     )?;
 
     if text.len() == 3 {
-        let _addr = format!("{}:{}", ip, &text[2]);
-        // print(&addr)?;
+        let addr = format!("{}:{}", ip, &text[2]);
+        print(&addr)?;
     }
     Ok(())
 }

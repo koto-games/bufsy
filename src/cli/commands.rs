@@ -41,10 +41,27 @@ impl Commands {
                 println!("move");
             }
             Commands::Echo { text } => {
+                let client = reqwest::Client::new();
                 let nonce = hex::encode(generate_nonce());
-                let test_encrypted =
-                    format!("{}|{}", encrypt(text, &config.key, &nonce).unwrap(), nonce);
-                println!("echo {}", test_encrypted);
+                let test_encrypted = format!(
+                    "{}|{}|{}",
+                    encrypt(text, &config.key, &nonce).unwrap(),
+                    nonce,
+                    config.server.port
+                );
+                println!(
+                    "echo {}  {}",
+                    test_encrypted,
+                    format!("http://{}:{}/text", config.server.host, config.server.port)
+                );
+                let _resp = client
+                    .post(format!(
+                        "http://{}:{}/text",
+                        config.server.host, config.server.port
+                    ))
+                    .body(test_encrypted)
+                    .send()
+                    .await?;
             }
             _ => {}
         }
