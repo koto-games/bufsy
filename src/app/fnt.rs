@@ -26,10 +26,7 @@ pub fn fnthost(text: String, ip: String, config: &Settings, config_dir: String) 
         })
     {
         let mut config_mut = load(&config_dir);
-        config_mut.connections.push(Server {
-            host: ip,
-            port: text[2].parse::<u16>()?,
-        });
+        config_mut.new_connection(ip.clone(), text[2].parse::<u16>()?);
         save(&config_mut, &config_dir)?;
     }
     Ok(())

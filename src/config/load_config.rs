@@ -48,6 +48,10 @@ pub mod tests {
             },
             key: "149a44cb0b9a4a56450c1da0cf8f107db8778b7e26c7b95fc4b36b9392c3b67b".to_owned(),
             connections: Vec::new(),
+            // connections: vec![Server {
+            //     host: "localhost".to_owned(),
+            //     port: 8086,
+            // }],
         }
     }
     pub fn test_config_dir() -> String {

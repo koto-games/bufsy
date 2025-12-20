@@ -99,6 +99,7 @@ bufsy run
 ```bash
 # с ноутбука
 bufsy echo "Hello, world!" -i 'IP с Настольного ПК' # 'bufsy echo' отправляет тестовое сообщение. в буфер обмена
+# или
 # с Настольного ПК
 bufsy echo "Hello, world!" -i 'IP с ноутбука'
 ```

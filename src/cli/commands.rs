@@ -4,7 +4,7 @@ use crate::{
         fnthost,
     },
     cli::Cli,
-    config::{Settings, save},
+    config::{Settings, load, save, settings::Server},
     transport::{Backend, axum::ServerAXUM},
 };
 use anyhow::Result;
@@ -76,7 +76,7 @@ impl Commands {
                         pipe.read_to_end(&mut contents)?;
                         let text = String::from_utf8_lossy(&contents).to_string();
                         println!("Pasted: {}", text);
-                        send_message(text, config.clone(), ip.clone()).await?;
+                        send_message(text, config.clone(), config_dir.clone(), ip.clone()).await?;
                     }
 
                     Err(wl_clipboard_rs::paste::Error::NoSeats)
@@ -92,7 +92,13 @@ impl Commands {
             }
             Commands::Echo { text, ip } => {
                 println!("echo {}", text);
-                send_message(text.to_owned(), config.clone(), ip.clone()).await?;
+                send_message(
+                    text.to_owned(),
+                    config.clone(),
+                    config_dir.clone(),
+                    ip.clone(),
+                )
+                .await?;
             }
             Commands::Key { command } => match command {
                 KeyEnum::Set { key_update } => {
@@ -132,7 +138,12 @@ impl Commands {
     }
 }
 
-async fn send_message(message: String, config: Settings, address: Option<String>) -> Result<()> {
+async fn send_message(
+    message: String,
+    config: Settings,
+    config_dir: String,
+    address: Option<String>,
+) -> Result<()> {
     let client = reqwest::Client::new();
 
     let nonce = hex::encode(generate_nonce());
@@ -142,23 +153,78 @@ async fn send_message(message: String, config: Settings, address: Option<String>
         nonce,
         config.server.port
     );
-
-    if let Some(address) = address {
-        let _resp = client
-            .post(format!("http://{}/text", address))
-            .body(test_encrypted.clone())
-            .send()
-            .await?;
+    let mut resp: Option<Result<reqwest::Response, reqwest::Error>> = None;
+    if let Some(address) = address.clone() {
+        resp = Some(
+            client
+                .post(format!("http://{}/text", address))
+                .body(test_encrypted.clone())
+                .send()
+                .await,
+        );
     }
     for connection in config.connections {
-        let _resp = client
+        println!("http://{}:{}/text", connection.host, connection.port);
+        let resp = client
             .post(format!(
                 "http://{}:{}/text",
                 connection.host, connection.port
             ))
             .body(test_encrypted.clone())
             .send()
-            .await?;
+            .await;
+        if let Err(_e) = resp {
+            println!(
+                "Failed to send message to {}!",
+                format!("{}:{}", connection.host, connection.port)
+            );
+        }
+    }
+    if let Some(resp) = resp {
+        if let Err(e) = resp {
+            println!("Failed to send message to server! '{}'", e);
+        } else if let Ok(resp) = resp {
+            if !resp.status().is_success() && resp.text().await.unwrap() != "oK" {
+                return Ok(());
+            }
+            let address = address.clone().unwrap();
+            let address_s: Vec<&str> = address.split(":").collect();
+            if address_s.len() != 2 {
+                return Err(anyhow::anyhow!("Invalid address format {}", address));
+            }
+            let mut config_mut = load(&config_dir);
+            config_mut.new_connection(address_s[0].to_string(), address_s[1].parse::<u16>()?);
+            if load(&config_dir).connections.contains(&Server {
+                host: address_s[0].to_string(),
+                port: address_s[1].parse::<u16>()?,
+            }) {
+                return Ok(());
+            }
+            println!("Connection added! {} {:?}", config_dir, config_mut);
+            save(&config_mut, &config_dir)?;
+        }
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::config::load_config::tests::{test_config_dir, test_load_config};
+
+    use super::*;
+
+    #[tokio::test]
+    async fn test_send_message() {
+        let config = test_load_config();
+        let config_dir = test_config_dir();
+
+        send_message(
+            "text :>".to_string(),
+            config.clone(),
+            config_dir.clone(),
+            None,
+        )
+        .await
+        .unwrap();
+    }
 }

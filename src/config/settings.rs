@@ -15,6 +15,12 @@ pub struct Server {
     pub port: u16,
 }
 
+impl Settings {
+    pub fn new_connection(&mut self, host: String, port: u16) {
+        self.connections.push(Server { host, port });
+    }
+}
+
 impl Default for Settings {
     fn default() -> Self {
         Settings {
