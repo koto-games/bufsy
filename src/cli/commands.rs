@@ -3,11 +3,12 @@ use crate::{
         encryption::{encrypt, generate_nonce},
         fnthost,
     },
+    cli::Cli,
     config::{Settings, save},
     transport::{Backend, axum::ServerAXUM},
 };
 use anyhow::Result;
-use clap::Subcommand;
+use clap::{CommandFactory, Subcommand};
 use std::io::{Read, Write};
 use wl_clipboard_rs::paste::{ClipboardType, MimeType, Seat, get_contents};
 
@@ -42,6 +43,9 @@ pub enum Commands {
         #[command(subcommand)]
         command: KeyEnum,
     },
+
+    /// генерация завершение
+    GenerateCompletion { shells: clap_complete::Shell },
 }
 
 #[derive(Subcommand, PartialEq)]
@@ -118,6 +122,10 @@ impl Commands {
                 }
                 KeyEnum::Show {} => println!("KEY \"{}\"", config.key),
             },
+            Commands::GenerateCompletion { shells } => {
+                let mut cmd = Cli::command();
+                clap_complete::generate(*shells, &mut cmd, "bufsy", &mut std::io::stdout());
+            }
             _ => {}
         }
         Ok(())
