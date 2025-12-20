@@ -13,7 +13,12 @@ pub async fn init(config_dir: &String) -> Result<()> {
         .expect("Failed to create or open the file");
     let settings = &Settings::default();
     file.write_all(toml::to_string(settings).unwrap().as_bytes())?;
-    println!("Initialized bufsy configuration at {}", config_dir);
+    println!("✓ Bufsy initialized");
+    println!(
+        "✓ Configuration saved to {}",
+        format!("{}/config.toml", config_dir)
+    );
+    println!("✓ Encryption key generated");
     Ok(())
 }
 

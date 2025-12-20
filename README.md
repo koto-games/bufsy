@@ -35,7 +35,7 @@ sudo ufw reload
 ```
 
 **NixOS (firewall):**
-```bash
+```nix
 networking.firewall.allowedTCPPorts = [ 9296 ];
 ```
 
