@@ -60,5 +60,17 @@ mod tests {
             )
             .is_err()
         );
+
+        assert!(fnthost("|", "127.0.11.1:8080", &config, &test_config_dir()).is_err());
+
+        assert!(
+            fnthost(
+                "|cat :>||||||||||||||||||||||||||||||cat||||:)||",
+                "127.0.2.3:8080",
+                &config,
+                &test_config_dir()
+            )
+            .is_err()
+        );
     }
 }
