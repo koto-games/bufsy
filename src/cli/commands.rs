@@ -57,7 +57,7 @@ pub enum KeyEnum {
 }
 
 impl Commands {
-    pub async fn run(&self, config_dir: String, config: Settings) -> Result<()> {
+    pub async fn run(&self, config_dir: &str, config: Settings) -> Result<()> {
         match &self {
             Commands::Run { ip, port } => {
                 let ip: String = ip.clone().unwrap_or(config.server.host.to_string());
@@ -76,7 +76,7 @@ impl Commands {
                         pipe.read_to_end(&mut contents)?;
                         let text = String::from_utf8_lossy(&contents).to_string();
                         println!("Pasted: {}", text);
-                        send_message(text, config.clone(), config_dir.clone(), ip.clone()).await?;
+                        send_message(&text, config.clone(), config_dir, ip.clone()).await?;
                     }
 
                     Err(wl_clipboard_rs::paste::Error::NoSeats)
@@ -92,13 +92,7 @@ impl Commands {
             }
             Commands::Echo { text, ip } => {
                 println!("echo {}", text);
-                send_message(
-                    text.to_owned(),
-                    config.clone(),
-                    config_dir.clone(),
-                    ip.clone(),
-                )
-                .await?;
+                send_message(text, config.clone(), config_dir, ip.clone()).await?;
             }
             Commands::Key { command } => match command {
                 KeyEnum::Set { key_update } => {
@@ -139,9 +133,9 @@ impl Commands {
 }
 
 async fn send_message(
-    message: String,
+    message: &str,
     config: Settings,
-    config_dir: String,
+    config_dir: &str,
     address: Option<String>,
 ) -> Result<()> {
     let client = reqwest::Client::new();
@@ -193,7 +187,7 @@ async fn send_message(
                 return Err(anyhow::anyhow!("Invalid address format {}", address));
             }
             let mut config_mut = load(&config_dir);
-            config_mut.new_connection(address_s[0].to_string(), address_s[1].parse::<u16>()?);
+            config_mut.new_connection(address_s[0], address_s[1].parse::<u16>()?);
             if load(&config_dir).connections.contains(&Server {
                 host: address_s[0].to_string(),
                 port: address_s[1].parse::<u16>()?,
@@ -218,13 +212,8 @@ mod tests {
         let config = test_load_config();
         let config_dir = test_config_dir();
 
-        send_message(
-            "text :>".to_string(),
-            config.clone(),
-            config_dir.clone(),
-            None,
-        )
-        .await
-        .unwrap();
+        send_message("text :>", config.clone(), &config_dir, None)
+            .await
+            .unwrap();
     }
 }

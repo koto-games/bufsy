@@ -6,7 +6,7 @@ use std::{
 
 use anyhow::Result;
 
-pub async fn init(config_dir: &String) -> Result<()> {
+pub async fn init(config_dir: &str) -> Result<()> {
     fs::create_dir_all(&config_dir)?;
 
     let mut file = File::create(format!("{}/config.toml", config_dir))

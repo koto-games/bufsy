@@ -11,7 +11,7 @@ use tokio::sync::RwLock;
 
 pub struct ServerAXUM {
     host: String,
-    fnt: fn(String, String, &Settings, String) -> Result<()>,
+    fnt: fn(&str, &str, &Settings, &str) -> Result<()>,
     port: u16,
     settings: Settings,
     config_dir: String,
@@ -21,16 +21,16 @@ impl ServerAXUM {
     pub fn new(
         host: &str,
         port: u16,
-        fnt: fn(String, String, &Settings, String) -> Result<()>,
+        fnt: fn(&str, &str, &Settings, &str) -> Result<()>,
         settings: Settings,
-        config_dir: String,
+        config_dir: &str,
     ) -> Self {
         Self {
             host: host.to_string(),
             fnt,
             port,
             settings,
-            config_dir,
+            config_dir: config_dir.to_string(),
         }
     }
 
@@ -39,7 +39,7 @@ impl ServerAXUM {
         // This avoids requiring FromRef implementations for extracting multiple separate State<T>
         // values and keeps the handler signature simple.
         let app_state: (
-            fn(String, String, &Settings, String) -> Result<()>,
+            fn(&str, &str, &Settings, &str) -> Result<()>,
             Settings,
             Arc<RwLock<HashSet<[u8; 28]>>>,
             String,
@@ -61,7 +61,7 @@ impl ServerAXUM {
     async fn text(
         ConnectInfo(addr): ConnectInfo<SocketAddr>,
         State((fnt_handler, settings, db, config_dir)): State<(
-            fn(String, String, &Settings, String) -> Result<()>,
+            fn(&str, &str, &Settings, &str) -> Result<()>,
             Settings,
             Arc<RwLock<HashSet<[u8; 28]>>>,
             String,
@@ -74,7 +74,7 @@ impl ServerAXUM {
         let mut db_rw = db.write().await;
         if !db_rw.contains(&result) {
             db_rw.insert(result);
-            fnt_handler(body.clone(), addr.ip().to_string(), &settings, config_dir).unwrap();
+            fnt_handler(&body, &addr.ip().to_string(), &settings, &config_dir).unwrap();
             "oK".to_string()
         } else {
             "Error".to_string()
@@ -127,7 +127,7 @@ mod tests {
             8099,
             fnt_test,
             test_load_config(),
-            test_config_dir(),
+            &test_config_dir(),
         );
         let app = server.router();
 
@@ -149,7 +149,7 @@ mod tests {
             8084,
             fnt_test,
             test_load_config(),
-            test_config_dir(),
+            &test_config_dir(),
         );
         assert_eq!(
             server.address().to_string(),
@@ -161,7 +161,7 @@ mod tests {
             999,
             fnt_test,
             test_load_config(),
-            test_config_dir(),
+            &test_config_dir(),
         );
         assert_eq!(server.address().to_string(), "127.0.0.1:999".to_string());
     }
@@ -173,7 +173,7 @@ mod tests {
             8080,
             fnt_test,
             test_load_config(),
-            test_config_dir(),
+            &test_config_dir(),
         );
         let result = ServerAXUM::text(
             ConnectInfo(SocketAddr::new(
@@ -200,7 +200,7 @@ mod tests {
             8080,
             fnt_test,
             test_load_config(),
-            test_config_dir(),
+            &test_config_dir(),
         );
         let db: Arc<RwLock<HashSet<[u8; 28]>>> = Arc::new(RwLock::new(HashSet::new()));
         let result = ServerAXUM::text(
@@ -261,12 +261,7 @@ mod tests {
         assert_eq!(result, "Error".to_string());
     }
 
-    fn fnt_test(
-        _text: String,
-        _addr: String,
-        _settings: &Settings,
-        _config_dir: String,
-    ) -> Result<()> {
+    fn fnt_test(_text: &str, _addr: &str, _settings: &Settings, _config_dir: &str) -> Result<()> {
         Ok(())
     }
 }

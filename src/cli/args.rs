@@ -10,13 +10,13 @@ pub struct Cli {
 }
 
 impl Cli {
-    pub async fn run(&self, config_dir: String) -> Result<()> {
+    pub async fn run(&self, config_dir: &str) -> Result<()> {
         if (Commands::Init {}) == self.command {
             init(&config_dir).await?;
             return Ok(());
         }
         let config = load(&config_dir);
-        self.command.run(config_dir, config).await?;
+        self.command.run(&config_dir, config).await?;
         Ok(())
     }
 }
